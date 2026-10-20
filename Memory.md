@@ -137,16 +137,16 @@ Docker overrides: `DB_HOST=mysql`, `*_SERVICE_URL=http://<service-name>:808x`.
 - [x] Phase 0 — Scope and contracts frozen (2026-10-20)
 - [x] Phase 1 — Repository/database foundation (2026-10-20) — verified
 - [x] Phase 2 — Shipment Service (2026-10-20) — verified
-- [ ] Phase 3 — Notification Service
+- [x] Phase 3 — Notification Service (2026-10-20) — verified
 - [ ] Phase 4 — Tracking Service
 - [ ] Phase 5 — React + Vite frontend
 - [ ] Phase 6 — Integration and regression
 - [ ] Phase 7 — Docker, docs, and final demo
 
-**Last completed phase:** Phase 2 — Shipment Service  
-**Last verified build/test:** 2026-10-20 — Shipment Service 18 unit tests + 22 API smoke checks PASS  
+**Last completed phase:** Phase 3 — Notification Service  
+**Last verified build/test:** 2026-10-20 — Notification Service 18 unit tests + 24 API smoke checks PASS  
 **Current blocker:** None for Phase 1. MariaDB 11.8.6 running via `mysqld --user=mysql` (systemd inactive due to sandbox policy). Docker unavailable — deferred per baseline.  
-**Next action:** Phase 3 — Notification Service (`POST /api/v1/notifications`, `GET /api/v1/notifications?trackingId=...`, `/health`, in-app records only).
+**Next action:** Phase 4 — Tracking Service (`GET /api/v1/tracking/{id}`, `POST /api/v1/tracking/{id}/events`, transaction, ShipmentClient, NotificationClient, partial-success).
 
 ## 11. Decision Log
 
@@ -274,4 +274,38 @@ Known issues:
 - Tracking Service not yet implemented (Phase 4), so all creates return trackingInitialized:false — intentional per frozen contract; retry path via operator POST BOOKED exists.
 API/schema changes: None — implemented frozen contracts exactly. Added trackingInitialized (Boolean, nullable) to ShipmentResponse for create only; GET omits it via NON_NULL. Documented in Phase 0 report.
 Next action: Phase 3 — Notification Service implementation (DTO/model/service/repository, POST/GET notifications, validation, in-app records only).
+
+### 2026-10-20 — Phase 3 — Notification Service
+Owner: Backend Agent C
+Files changed:
+- New: `notification-service/src/main/java/com/parcelflow/notification/exception/ValidationException.java`
+- New: `notification-service/src/main/java/com/parcelflow/notification/dto/CreateNotificationRequest.java` (trackingId, status, title, message)
+- New: `notification-service/src/main/java/com/parcelflow/notification/dto/NotificationResponse.java` (@JsonInclude NON_NULL, id, trackingId, title, message, status, createdAt, deliveryState)
+- New: `notification-service/src/main/java/com/parcelflow/notification/service/NotificationService.java` (canonical statuses BOOKED/IN_TRANSIT/OUT_FOR_DELIVERY/DELIVERED/DELAYED, validate 32/120/255, always RECORDED, in-app only)
+- New: `notification-service/src/main/java/com/parcelflow/notification/http/NotificationHandler.java` (POST /api/v1/notifications → 201, GET /api/v1/notifications?trackingId= → 200 array, 8KB limit, 400/500, CORS, no SQL)
+- Updated: `notification-service/src/main/java/com/parcelflow/notification/NotificationApplication.java` (wired /health + /api/v1/notifications)
+- New: `notification-service/src/test/java/com/parcelflow/notification/NotificationServiceValidationTest.java` (17 tests with in-memory FakeNotificationRepository: validation, canonical statuses, isolation, empty list, blank/invalid, deliveryState)
+Implementation decisions:
+- In-app records only: deliveryState always "RECORDED", never email/SMS; response includes deliveryState, title/message/status/createdAt.
+- Strict service ownership: owns `notifications` table only; no queries to shipments/shipment_status/tracking_events (verified via grep).
+- GET returns 200 [] for unknown trackingId (not 404) per spec; missing/blank trackingId query param → 400 VALIDATION_ERROR.
+- Validation: trackingId 6-32 ^[A-Za-z0-9_-]+$, status must be canonical (uppercased), title ≤120, message ≤255, all trimmed + blank rejected.
+- Repository uses PreparedStatement + try-with-resources, explicit column names, no SELECT *.
+- Error shape consistent {error:{code,message}}; Content-Type json utf-8; CORS for FRONTEND_ORIGIN; Options 204.
+Commands run:
+- `mvn clean compile` (notification) → PASS
+- `mvn test` (notification) → 18 tests (Config 1, Validation 17) PASS
+- `mvn package -DskipTests` → jar OK, classpath built
+- DB: `TRUNCATE notifications` → 0 rows, then 4 notifications via API → SELECT shows correct isolation
+- `java -cp ... NotificationApplication` on 8083 with DB_PASSWORD=change_me_locally → DB connected, health 200
+- Smoke script /tmp/phase3_tests.sh → 24 passed, 0 failed (201/200/400/404/CORS/DB/in-app)
+- Restart test: POST PF26RESTART → count 1, kill, restart, GET same → count 1, health 200 → persistence PASS
+Tests run and actual results:
+- Unit tests: 18/18 PASS (canonical statuses, isolation, blank/invalid, deliveryState)
+- API smoke: 24/24 PASS — valid create 201 with id/RECORDED, list 200, isolation (no leak), unknown 200 [], invalid payloads 400, missing/blank query 400, malformed JSON 400, health 200, CORS 204, DB 3+ rows, no stack leak, in-app only.
+Known issues:
+- Tracking Service not yet implemented, so shipment→tracking→notification flow not yet integrated; current verification is independent notification create/list.
+- CreatedAt set via DB CURRENT_TIMESTAMP then fetched back for accuracy; slight difference from request time acceptable.
+API/schema changes: None — implemented frozen contracts exactly. Notification request/response fields match Architecture §5: trackingId, status, title, message, deliveryState RECORDED.
+Next action: Phase 4 — Tracking Service (status values, transition rules, atomic transaction, ShipmentClient + NotificationClient with timeouts, initial BOOKED, 409/404 handling, partial-success).
 
