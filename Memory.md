@@ -136,17 +136,17 @@ Docker overrides: `DB_HOST=mysql`, `*_SERVICE_URL=http://<service-name>:808x`.
 
 - [x] Phase 0 — Scope and contracts frozen (2026-10-20)
 - [x] Phase 1 — Repository/database foundation (2026-10-20) — verified
-- [ ] Phase 2 — Shipment Service
+- [x] Phase 2 — Shipment Service (2026-10-20) — verified
 - [ ] Phase 3 — Notification Service
 - [ ] Phase 4 — Tracking Service
 - [ ] Phase 5 — React + Vite frontend
 - [ ] Phase 6 — Integration and regression
 - [ ] Phase 7 — Docker, docs, and final demo
 
-**Last completed phase:** Phase 1 — Repository/database foundation  
-**Last verified build/test:** 2026-10-20 — all three services compile + unit tests pass (see below)  
+**Last completed phase:** Phase 2 — Shipment Service  
+**Last verified build/test:** 2026-10-20 — Shipment Service 18 unit tests + 22 API smoke checks PASS  
 **Current blocker:** None for Phase 1. MariaDB 11.8.6 running via `mysqld --user=mysql` (systemd inactive due to sandbox policy). Docker unavailable — deferred per baseline.  
-**Next action:** Phase 2 — Implement Shipment Service (`POST /api/v1/shipments`, `GET /api/v1/shipments/{id}`, `/health` already done, validation, tracking ID generation, persistence).
+**Next action:** Phase 3 — Notification Service (`POST /api/v1/notifications`, `GET /api/v1/notifications?trackingId=...`, `/health`, in-app records only).
 
 ## 11. Decision Log
 
@@ -238,3 +238,40 @@ Known issues:
 - Health endpoint does not probe DB (by design for Phase 1 liveness only).
 API/schema changes: None — implemented frozen schema exactly; API contracts unchanged (only /health implemented so far).
 Next action: Phase 2 — Shipment Service full implementation (validation, tracking ID generation PF+YY+6alnum, POST/GET shipments, integrate Tracking BOOKED call, unit + API tests, 201/400/404 checks, no SQL in handlers).
+
+### 2026-10-20 — Phase 2 — Shipment Service
+Owner: Backend Agent A
+Files changed:
+- New: `shipment-service/src/main/java/com/parcelflow/shipment/exception/ValidationException.java`, `NotFoundException.java`
+- New: `shipment-service/src/main/java/com/parcelflow/shipment/util/TrackingIdGenerator.java` (PF+YY+6alnum, SecureRandom, pattern PF\\d{2}[A-Z0-9]{6})
+- New: `shipment-service/src/main/java/com/parcelflow/shipment/client/TrackingClient.java` (HttpClient, 2s connect/3s read timeout, POST /api/v1/tracking/{id}/events BOOKED, never fails shipment creation)
+- New: `shipment-service/src/main/java/com/parcelflow/shipment/service/ShipmentService.java` (validate 100/120 char limits, generate ID with 3 retries on duplicate, insert via repo, call trackingClient, return ShipmentResponse with trackingInitialized)
+- New: `shipment-service/src/main/java/com/parcelflow/shipment/http/ShipmentHandler.java` (thin handler, routing POST /api/v1/shipments and GET /api/v1/shipments/{id}, 8KB body limit, malformed JSON 400, CORS, no SQL)
+- Updated: `shipment-service/src/main/java/com/parcelflow/shipment/ShipmentApplication.java` (wired /health + /api/v1/shipments handler)
+- Updated: `shipment-service/src/main/java/com/parcelflow/shipment/dto/ShipmentResponse.java` (@JsonInclude NON_NULL so GET omits trackingInitialized)
+- New: `shipment-service/src/test/java/com/parcelflow/shipment/TrackingIdGeneratorTest.java` (4 tests), `ShipmentServiceValidationTest.java` (12 tests)
+Implementation decisions:
+- Strict ownership preserved: Shipment responses contain no currentStatus; Tracking is source of truth. GET omits trackingInitialized.
+- Tracking ID format: PF + 2-digit year + 6-char uppercase alnum (10 chars, e.g., PF26A1B2C3) — matches PRD PF+date+random.
+- Validation: senderName/recipientName ≤100, origin/destination ≤120, trimmed, blank rejected → 400 VALIDATION_ERROR. trackingId blank/malformed (not matching ^[A-Za-z0-9_-]+$ 6-32) → 400, not found → 404.
+- Idempotent schema: ShipmentRepository insert uses PreparedStatement, try-with-resources, returns generated keys. Duplicate tracking_id (MySQL 1062) triggers retry with new ID up to 3 times.
+- Tracking init per Phase 0 Q1-A: after commit, call TrackingClient; log failure but return 201 with trackingInitialized:false. Verified via curl that when Tracking down, shipment still 201.
+- Error shape: {error:{code,message}} consistent; 405 for method not allowed, 500 hides stack trace; Content-Type application/json; charset=utf-8, CORS for FRONTEND_ORIGIN.
+Commands run:
+- `mvn clean compile` (shipment) → PASS
+- `mvn test` (shipment) → 18 tests (Config 2, TrackingId 4, Validation 12) PASS
+- `mvn package -DskipTests` → 16K jar built
+- DB: `TRUNCATE shipments` then create 7 rows via API, `SELECT COUNT(*)` → 7
+- `java -cp ... ShipmentApplication` on 8081 with DB_PASSWORD=change_me_locally → DB connected, health 200
+- Smoke script /tmp/phase2_tests.sh → 22 passed, 0 failed (201/200/400/404/CORS/persistence/no stack leak)
+Tests run and actual results:
+- Unit tests: 18/18 PASS (see above)
+- API smoke: 22/22 PASS — valid create 201 with unique trackingId, lookup 200, unknown 404, invalid input 400, malformed JSON 400, malformed ID 400, health 200, CORS 204, persistence across restart verified (DB rows survive kill+restart, GET after restart returns same), trackingInitialized false when Tracking down (expected), no SQL in handler, no cross-table reads verified via grep.
+Known issues:
+- TrackingClient log shows null message for ConnectException (HttpClient) — improved to log class name.
+- GET returns createdAt truncated to seconds (DB TIMESTAMP precision) vs POST returns nanos — acceptable for baseline, documented as ISO-8601.
+- Body limit 8KB enforced via streaming check; not yet tested with >8KB payload (would return 400).
+- Tracking Service not yet implemented (Phase 4), so all creates return trackingInitialized:false — intentional per frozen contract; retry path via operator POST BOOKED exists.
+API/schema changes: None — implemented frozen contracts exactly. Added trackingInitialized (Boolean, nullable) to ShipmentResponse for create only; GET omits it via NON_NULL. Documented in Phase 0 report.
+Next action: Phase 3 — Notification Service implementation (DTO/model/service/repository, POST/GET notifications, validation, in-app records only).
+

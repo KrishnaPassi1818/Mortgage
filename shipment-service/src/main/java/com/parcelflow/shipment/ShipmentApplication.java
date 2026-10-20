@@ -2,6 +2,7 @@ package com.parcelflow.shipment;
 
 import com.parcelflow.shipment.config.Config;
 import com.parcelflow.shipment.http.HealthHandler;
+import com.parcelflow.shipment.http.ShipmentHandler;
 import com.parcelflow.shipment.repository.Database;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -13,9 +14,11 @@ public class ShipmentApplication {
         HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
 
         server.createContext("/health", new HealthHandler());
-        // Phase 2 will add /api/v1/shipments handlers
+        server.createContext("/api/v1/shipments", new ShipmentHandler());
+        // Also handle trailing slash variant and path-with-id under same context:
+        // HttpServer matches prefix, so /api/v1/shipments handles both POST and GET/{id} via same handler
 
-        // Basic DB check on startup (log, don't crash for Phase 1 demo)
+        // Basic DB check on startup (log, don't crash)
         try {
             String version = Database.checkConnection();
             System.out.println("[Shipment] DB connected: " + version);
@@ -28,5 +31,7 @@ public class ShipmentApplication {
         server.start();
         System.out.println("Shipment Service listening on port " + port);
         System.out.println("  Health: http://localhost:" + port + "/health");
+        System.out.println("  Create: POST http://localhost:" + port + "/api/v1/shipments");
+        System.out.println("  Lookup: GET http://localhost:" + port + "/api/v1/shipments/{trackingId}");
     }
 }

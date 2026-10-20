@@ -1,8 +1,10 @@
 package com.parcelflow.shipment.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.LocalDateTime;
 
 /** Response for shipment create/lookup — strict ownership: no currentStatus field. */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ShipmentResponse {
     private String trackingId;
     private String senderName;
