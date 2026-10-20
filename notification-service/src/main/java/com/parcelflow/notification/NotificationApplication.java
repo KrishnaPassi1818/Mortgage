@@ -6,6 +6,7 @@ import com.parcelflow.notification.http.NotificationHandler;
 import com.parcelflow.notification.repository.Database;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
+import java.util.concurrent.Executors;
 
 public class NotificationApplication {
     public static void main(String[] args) throws Exception {
@@ -21,7 +22,7 @@ public class NotificationApplication {
             System.out.println("[Notification] WARNING: DB not reachable: " + e.getMessage());
         }
 
-        server.setExecutor(null);
+        server.setExecutor(Executors.newCachedThreadPool());
         server.start();
         System.out.println("Notification Service listening on port " + port);
         System.out.println("  Health: http://localhost:" + port + "/health");

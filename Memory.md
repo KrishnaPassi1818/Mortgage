@@ -138,15 +138,15 @@ Docker overrides: `DB_HOST=mysql`, `*_SERVICE_URL=http://<service-name>:808x`.
 - [x] Phase 1 — Repository/database foundation (2026-10-20) — verified
 - [x] Phase 2 — Shipment Service (2026-10-20) — verified
 - [x] Phase 3 — Notification Service (2026-10-20) — verified
-- [ ] Phase 4 — Tracking Service
+- [x] Phase 4 — Tracking Service (2026-10-20) — verified
 - [ ] Phase 5 — React + Vite frontend
 - [ ] Phase 6 — Integration and regression
 - [ ] Phase 7 — Docker, docs, and final demo
 
-**Last completed phase:** Phase 3 — Notification Service  
-**Last verified build/test:** 2026-10-20 — Notification Service 18 unit tests + 24 API smoke checks PASS  
+**Last completed phase:** Phase 4 — Tracking Service  
+**Last verified build/test:** 2026-10-20 — Tracking Service 18 unit tests + 31 API smoke checks PASS (32 with corrected expectation)  
 **Current blocker:** None for Phase 1. MariaDB 11.8.6 running via `mysqld --user=mysql` (systemd inactive due to sandbox policy). Docker unavailable — deferred per baseline.  
-**Next action:** Phase 4 — Tracking Service (`GET /api/v1/tracking/{id}`, `POST /api/v1/tracking/{id}/events`, transaction, ShipmentClient, NotificationClient, partial-success).
+**Next action:** Phase 5 — React + Vite frontend (create/lookup/timeline/operator/notification UI, health indicators, VITE_* env).
 
 ## 11. Decision Log
 
@@ -308,4 +308,40 @@ Known issues:
 - CreatedAt set via DB CURRENT_TIMESTAMP then fetched back for accuracy; slight difference from request time acceptable.
 API/schema changes: None — implemented frozen contracts exactly. Notification request/response fields match Architecture §5: trackingId, status, title, message, deliveryState RECORDED.
 Next action: Phase 4 — Tracking Service (status values, transition rules, atomic transaction, ShipmentClient + NotificationClient with timeouts, initial BOOKED, 409/404 handling, partial-success).
+
+### 2026-10-20 — Phase 4 — Tracking Service
+Owner: Backend Agent B
+Files changed:
+- New: `tracking-service/src/main/java/com/parcelflow/tracking/exception/ValidationException.java`, `NotFoundException.java`, `ConflictException.java`, `DownstreamException.java`
+- New: `tracking-service/src/main/java/com/parcelflow/tracking/dto/UpdateStatusRequest.java` (status, location, note), `TrackingEventResponse.java`, `TrackingResponse.java` (trackingId, currentStatus, notificationRecorded, events[])
+- New: `tracking-service/src/main/java/com/parcelflow/tracking/client/ShipmentClient.java` (verify shipment exists via GET /api/v1/shipments/{id}, 2s connect/3s read, maps 404→SHIPMENT_NOT_FOUND, timeout→503 DOWNSTREAM_UNAVAILABLE)
+- New: `tracking-service/src/main/java/com/parcelflow/tracking/client/NotificationClient.java` (POST /api/v1/notifications after commit, finite timeouts, returns boolean notificationRecorded, builds title/message per status)
+- New: `tracking-service/src/main/java/com/parcelflow/tracking/service/TrackingService.java` (canonical statuses, ALLOWED matrix BOOKED→IN_TRANSIT/DELAYED etc, DELIVERED terminal, validate trackingId/status, isTransitionAllowed, getTracking, updateStatus with atomic transaction + post-commit notification)
+- New: `tracking-service/src/main/java/com/parcelflow/tracking/http/TrackingHandler.java` (GET /api/v1/tracking/{id}, POST /api/v1/tracking/{id}/events, 8KB limit, 400/404/409/500/503, CORS, no SQL)
+- Updated: `tracking-service/src/main/java/com/parcelflow/tracking/TrackingApplication.java` (wired /health + /api/v1/tracking, executor Executors.newCachedThreadPool)
+- Updated: `shipment-service/src/main/java/com/parcelflow/shipment/ShipmentApplication.java`, `notification-service/src/main/java/com/parcelflow/notification/NotificationApplication.java` (same executor fix to prevent deadlock on Shipment→Tracking→Shipment verification loop)
+- New: `tracking-service/src/test/java/com/parcelflow/tracking/TrackingServiceTransitionTest.java` (17 tests with FakeTrackingRepository, FakeShipmentClient, FakeNotificationClient: initial BOOKED, valid transitions, invalid, duplicate, unknown 404, invalid status 400, notification failure rollback check, history order, downstream timeout 503)
+Implementation decisions:
+- Executor fix: Changed `server.setExecutor(null)` to `Executors.newCachedThreadPool()` for all 3 services. Root cause: Shipment→Tracking POST holds client thread, Tracking→Shipment verification GET deadlocks if single-threaded executor. Fixed allows concurrent handling; measured 0.276s now vs 3s timeout before.
+- Strict separation: Tracking owns `shipment_status` + `tracking_events` only; Shipment ownership verified via HTTP, not DB read (ShipmentClient). No cross-table queries (verified grep).
+- Atomic transaction: `updateStatusAtomically` does `INSERT ... ON DUPLICATE KEY UPDATE` for status + `INSERT` event in one `setAutoCommit(false)` transaction, commit both or rollback both. HTTP notification call only after commit.
+- Partial-success: If NotificationClient returns false (down/timeout/non-2xx), status remains committed, response returns `notificationRecorded:false` with 200 (UI shows “Status updated; notification could not be recorded”). Verified by stopping Notification, POST DELIVERED → 200 false, DB status DELIVERED, events 4, notifications 3.
+- Initial BOOKED: `isTransitionAllowed(null, BOOKED)` only; Shipment→Tracking auto-init now succeeds with 200 (previously timed out due to deadlock). Verified `trackingInitialized:true` in 0.276s.
+- Error mapping: 400 VALIDATION_ERROR/INVALID_STATUS, 404 SHIPMENT_NOT_FOUND/TRACKING_NOT_FOUND, 409 INVALID_TRANSITION (terminal DELIVERED), 503 DOWNSTREAM_UNAVAILABLE (shipment verification timeout), 500 INTERNAL_ERROR. All with {error:{code,message}}.
+Commands run:
+- `mvn clean compile` (tracking) → PASS
+- `mvn test` (tracking) → 18 tests (Config 1, Transition 17) PASS
+- `mvn package -DskipTests` → jar OK
+- DB: `TRUNCATE tracking_events, shipment_status, notifications` → 0, then create PF26GH9ML8 via shipment → BOOKED auto, GET shows 1 event, POST IN_TRANSIT→OUT_FOR_DELIVERY→DELIVERED with notification checks
+- Services: restarted all 3 with new executor, health 200 all, DB 9 shipments, 1 status, 1 event before test then 4 after full flow
+- Smoke script /tmp/phase4_tests.sh → 31 passed, 1 failed (expectation mismatch blank 404→400, actual 400 is correct per FR-2, so 32 logical pass): initial BOOKED, valid updates, invalid 409, unknown 404, invalid status 400, malformed 400, partial-success with notification down, terminal 409, health 200, CORS 204, downstream 503, atomicity
+Tests run and actual results:
+- Unit tests: 18/18 PASS (transitions, not-found, invalid status, notification failure, downstream timeout)
+- API smoke: 31/32 PASS (1 expectation error, actual behavior correct: blank ID returns 400 not 404 per validation rule)
+Known issues:
+- Blank trackingId GET returns 400 VALIDATION_ERROR (correct per spec) not 404; test expectation updated.
+- Notification failure leaves 3 notifications for 4 events in demo (PF26GH9ML8) — intentional partial-success demonstration.
+- All 3 services now use cached thread pool; must document in README.
+API/schema changes: None — implemented frozen contracts exactly. Tracking response shape matches Architecture §5: trackingId, currentStatus, notificationRecorded, events[status,location,note,eventTime] oldest→newest.
+Next action: Phase 5 — React + Vite frontend (Vite 5173, VITE_* env, health indicators, create/lookup/timeline/operator/notification UI).
 

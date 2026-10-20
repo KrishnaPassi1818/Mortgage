@@ -6,6 +6,7 @@ import com.parcelflow.shipment.http.ShipmentHandler;
 import com.parcelflow.shipment.repository.Database;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
+import java.util.concurrent.Executors;
 
 public class ShipmentApplication {
 
@@ -27,7 +28,7 @@ public class ShipmentApplication {
             System.out.println("[Shipment] Service will start but DB operations will fail until DB is available.");
         }
 
-        server.setExecutor(null);
+        server.setExecutor(Executors.newCachedThreadPool());
         server.start();
         System.out.println("Shipment Service listening on port " + port);
         System.out.println("  Health: http://localhost:" + port + "/health");
