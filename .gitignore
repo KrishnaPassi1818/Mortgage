@@ -1,0 +1,53 @@
+# Build
+target/
+dist/
+*.class
+*.jar
+*.war
+
+# Dependencies (Maven local not committed, but keep for safety)
+.mvn/
+.m2/
+
+# Environment secrets
+.env
+.env.local
+.env.development.local
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.settings/
+.classpath
+.project
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Database dumps
+*.sql.dump
+*.dump
+
+# Generated
+coverage/
+.nyc_output/
+.arena/
+.cache/
+.sudo_as_admin_successful
