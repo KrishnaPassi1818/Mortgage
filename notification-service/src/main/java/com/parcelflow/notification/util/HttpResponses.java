@@ -19,10 +19,13 @@ public final class HttpResponses {
         sendJson(exchange, statusCode, err);
     }
     public static void addCors(HttpExchange exchange) {
-        String origin = com.parcelflow.notification.config.Config.getFrontendOrigin();
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
+        String requestOrigin = exchange.getRequestHeaders().getFirst("Origin");
+        String allowedOrigin = (requestOrigin != null && !requestOrigin.isBlank()) ? requestOrigin : com.parcelflow.notification.config.Config.getFrontendOrigin();
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", allowedOrigin);
         exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Credentials", "true");
+        exchange.getResponseHeaders().set("Vary", "Origin");
     }
     public static void handleOptions(HttpExchange exchange) throws IOException {
         addCors(exchange);
