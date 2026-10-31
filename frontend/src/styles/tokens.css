@@ -1,0 +1,90 @@
+:root {
+  /*
+   * Claude-inspired Warm Editorial Design Palette
+   * Primary Accent: #c15f3c (Terracotta / Clay warm orange)
+   * Base Canvas: #f4f3ee (Warm linen / oatmeal parchment)
+   * Surfaces: #ffffff (Crisp elevated white card surfaces)
+   * Borders & Secondary: #b1ada1 (Soft stone / muted warm slate)
+   * Dark Accents & Contrast: #2b2724 / #1f1d1a
+   */
+
+  /* Surfaces & Backgrounds */
+  --bg-app: #f4f3ee;              /* Claude Warm Linen Canvas */
+  --bg-surface: #ffffff;          /* Pristine Crisp White Surface */
+  --bg-surface-elevated: #ffffff; /* Elevated Content Containers */
+  --bg-surface-hover: #eceae3;    /* Subtle Oatmeal Hover State */
+  --bg-surface-active: #e3dfd5;   /* Active / Pressed Surface State */
+
+  /* Borders & Dividers */
+  --border-subtle: rgba(177, 173, 161, 0.28);  /* Subtle stone boundary */
+  --border-default: rgba(177, 173, 161, 0.48); /* Soft slate border */
+  --border-strong: #b1ada1;                     /* Defined frame outline */
+
+  /* Text Hierarchy */
+  --text-primary: #1f1d1a;   /* Deep charcoal / warm espresso for readability */
+  --text-secondary: #575249; /* Warm graphite for captions & subtitles */
+  --text-muted: #7d776d;     /* Muted stone grey for helper text & stamps */
+  --text-inverse: #ffffff;   /* Pure white text on Terracotta / dark accents */
+
+  /* Primary Accent: Claude Terracotta (#c15f3c) */
+  --color-accent: #c15f3c;
+  --color-accent-hover: #a94f30;
+  --color-accent-subtle: rgba(193, 95, 60, 0.09);
+  --color-accent-border: rgba(193, 95, 60, 0.32);
+  --color-accent-text: #ffffff; /* High contrast crisp white on terracotta */
+
+  /* Swatches Reference */
+  --color-terracotta: #c15f3c;
+  --color-white: #ffffff;
+  --color-oatmeal: #f4f3ee;
+  --color-stone: #b1ada1;
+  --color-charcoal: #1f1d1a;
+
+  /* Status Tokens Harmonized with Claude Warm Palette */
+  --status-booked: #7d776d;
+  --status-booked-bg: rgba(177, 173, 161, 0.2);
+  --status-booked-border: rgba(177, 173, 161, 0.45);
+
+  --status-in_transit: #c15f3c;
+  --status-in_transit-bg: rgba(193, 95, 60, 0.12);
+  --status-in_transit-border: rgba(193, 95, 60, 0.35);
+
+  --status-out_for_delivery: #b45309; /* Warm amber / ochre */
+  --status-out_for_delivery-bg: rgba(180, 83, 9, 0.12);
+  --status-out_for_delivery-border: rgba(180, 83, 9, 0.3);
+
+  --status-delivered: #2e694b; /* Earthy forest sage green */
+  --status-delivered-bg: rgba(46, 105, 75, 0.12);
+  --status-delivered-border: rgba(46, 105, 75, 0.35);
+
+  --status-delayed: #a82a2a; /* Warm brick red */
+  --status-delayed-bg: rgba(168, 42, 42, 0.12);
+  --status-delayed-border: rgba(168, 42, 42, 0.32);
+
+  /* Geometry - Softened, organic, editorial */
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  /* Elevation - Soft warm organic diffuse shadows */
+  --shadow-sm: 0 1px 3px rgba(31, 29, 26, 0.05), 0 1px 2px rgba(31, 29, 26, 0.03);
+  --shadow-md: 0 4px 14px rgba(31, 29, 26, 0.07), 0 1px 3px rgba(31, 29, 26, 0.04);
+  --shadow-lg: 0 12px 32px rgba(31, 29, 26, 0.09), 0 2px 6px rgba(31, 29, 26, 0.04);
+
+  /* Typography */
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Monaco, monospace;
+
+  /* Aliases for --pf-* compatibility */
+  --pf-text-primary: var(--text-primary);
+  --pf-text-secondary: var(--text-secondary);
+  --pf-text-muted: var(--text-muted);
+  --pf-accent-primary: var(--color-accent);
+  --pf-border-color: var(--border-default);
+  --pf-card-bg-subtle: #fbfbfa;
+  --pf-status-delayed-bg: var(--status-delayed-bg);
+  --pf-status-delivered-bg: var(--status-delivered-bg);
+}
