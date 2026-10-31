@@ -3,6 +3,7 @@ package com.parcelflow.shipment;
 import com.parcelflow.shipment.config.Config;
 import com.parcelflow.shipment.http.HealthHandler;
 import com.parcelflow.shipment.http.ShipmentHandler;
+import com.parcelflow.shipment.http.UserHandler;
 import com.parcelflow.shipment.repository.Database;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -16,6 +17,10 @@ public class ShipmentApplication {
 
         server.createContext("/health", new HealthHandler());
         server.createContext("/api/v1/shipments", new ShipmentHandler());
+        UserHandler userHandler = new UserHandler();
+        server.createContext("/api/v1/auth", userHandler);
+        server.createContext("/api/v1/users", userHandler);
+        server.createContext("/api/v1/requests", userHandler);
         // Also handle trailing slash variant and path-with-id under same context:
         // HttpServer matches prefix, so /api/v1/shipments handles both POST and GET/{id} via same handler
 
