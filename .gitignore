@@ -51,3 +51,11 @@ coverage/
 .arena/
 .cache/
 .sudo_as_admin_successful
+
+# Local IDE and scratch
+.config/
+.gemini/
+dribbble_page.html
+uploads/
+*.pdf
+.github/modernize/
